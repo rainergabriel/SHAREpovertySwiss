@@ -717,8 +717,8 @@ prop.table(table(wave9$poverty.self.reported.bn))
 
 # set survey design for population estimates 
 dsurvey.w9 <- svydesign(ids = wave9$mergeid, data = wave9, weights = wave9$cciw_w9)
-t3 <- svymean(~poverty.agg.bn, dsurvey.w9, na.rm=TRUE) # est
-t4 <- svymean(~poverty.self.reported.bn, dsurvey.w9, na.rm=TRUE) # est
+t3 <- svymean(~poverty.agg.bn, dsurvey.w9, na.rm=TRUE)*100 # est
+t4 <- svymean(~poverty.self.reported.bn, dsurvey.w9, na.rm=TRUE)*100 # est
 
 
 table.w9 <- rbind(t3,t4)
