@@ -1,0 +1,742 @@
+#### This code calculates absolute poverty rates (aka poverty headcount ratio) for the population at the age of retirement in Switzerland using the OECD equivalence scale approach and the SKOS absolute poverty lines 
+#### This document was created for the SHARE team Switzerland in order to explain why poverty rates are either too low (when using the thinc variable) or too high (when using the thinc2 variable) 
+
+rm(list = ls()) #clear everything from the workspace
+
+# Loading libraries -------------------------------------------------------
+library(foreign)
+library(reshape2)
+library(tidyverse)
+library(survey)
+
+# 1. Loading datasets and subsetting for Switzerland and 65+--------------------------------------------------------
+
+# remove everything 
+rm(list=ls())
+
+
+#set path to local raw data wave6 (SHARE data)
+local.file.path <- "/Users/gabn/Library/CloudStorage/GoogleDrive-rainer.gabriel@gmail.com/My Drive/Documents/Work/ACTIVE/ZHAW/3_Research-Projects/Armut 13. AHV /Shared-Eliane/Data/sharew6_rel7-1-0_ALL_datasets_spss/"
+
+### Setting Up Share Wave6
+wave6.activities <- #infos on activities
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_ac.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.consumption <- #infos on consumption
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_co.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.demo<- #infos on demographics
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_dn.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.finance<- #financial infos
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_ft.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+wave6.fin.transfers<- #financial transfers
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_ft.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+wave6.healthcare<- 
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_hc.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.basics <-
+  #basic information on participants (share calls this "coverscreen")
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_cv_r.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.tech <- #technical variables
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_technical_variables.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.assets <- #technical variables
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_as.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.weights <- #cross-sectional weights
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_gv_weights.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.hh <- #household incomes
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_hh.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.gv.housing <- #generated variables housing
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_gv_housing.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.imp <- #all imputed variables
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_gv_imputations.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.pensions <- #pension infos
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_ep.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave6.children <- #infos on children
+  read.spss(
+    file = paste0(local.file.path,"sharew6_rel7-1-0_ch.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+# Subset all datasets for switzerland ----------------------------
+wave6.activities <- subset(wave6.activities,country=="Switzerland")
+wave6.assets<- subset(wave6.assets,country=="Switzerland")
+wave6.basics<- subset(wave6.basics,country=="Switzerland")
+wave6.children<- subset(wave6.children,country=="Switzerland")
+wave6.consumption<- subset(wave6.consumption,country=="Switzerland")
+wave6.demo<- subset(wave6.demo,country=="Switzerland")
+wave6.fin.transfers<- subset(wave6.fin.transfers,country=="Switzerland")
+wave6.finance<- subset(wave6.finance,country=="Switzerland")
+wave6.gv.housing<- subset(wave6.gv.housing,country=="Switzerland")
+wave6.healthcare<- subset(wave6.healthcare,country=="Switzerland")
+wave6.hh<- subset(wave6.hh,country=="Switzerland")
+wave6.imp<- subset(wave6.imp,country=="Switzerland")
+wave6.pensions<- subset(wave6.pensions,country=="Switzerland")
+wave6.tech<- subset(wave6.tech,country=="Switzerland")
+wave6.weights<- subset(wave6.weights,country=="Switzerland")
+
+# Merging all these switzerland specific datasets -------------------------
+wave6.merged <-  merge(wave6.activities, wave6.assets, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.basics, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.children, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.consumption, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.demo, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.fin.transfers, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.gv.housing, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.healthcare, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.hh, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.pensions, by = "mergeid")
+wave6.merged <- merge(wave6.merged, wave6.tech, by = "mergeid")
+wave6 <- merge(wave6.merged, wave6.weights, by = "mergeid")
+rm(wave6.merged)
+
+#remove all previous datasets to clear the workspace
+rm(wave6.activities)
+rm(wave6.assets)
+rm(wave6.basics)
+rm(wave6.children)
+rm(wave6.consumption)
+rm(wave6.demo)
+rm(wave6.fin.transfers)
+rm(wave6.finance)
+rm(wave6.gv.housing)
+rm(wave6.healthcare)
+rm(wave6.hh)
+# rm(wave6.imp) #...except for the imputation file cause lots of variables are gonna be taken from it and it can't be merged in long form
+rm(wave6.pensions)
+rm(wave6.tech)
+rm(wave6.weights)
+
+# at this stage we have merged all the files into one specific switzerland dataset
+
+#subset according to age
+levels(wave6$age2015)
+wave6$age2015.char <- as.character(wave6$age2015)
+head(wave6$age2015.char)
+wave6$age2015.num <- memisc::recode(wave6$age2015.char,
+                                    NA<- c( "Don't know","Refusal","Not applicable"), 
+                                    otherwise="copy")
+wave6$age2015.num <- as.numeric(as.character(wave6$age2015.num))
+wave6 <- subset(wave6, wave6$age2015.num>=65)
+
+#remove those in retirement homes 
+nursinghome <- which(wave6$mn024_=="Nursing home")
+length(nursinghome)
+wave6 <- wave6[-nursinghome,]
+nursinghome.ids <- wave6$mergeid[nursinghome]
+wave6.imp <- wave6.imp[!wave6.imp$mergeid %in% nursinghome.ids, ]
+
+#remove refreshment sample and leave only longitudinals
+refresh <- which(wave6$mn101_=="Baseline questionnaire")
+length(refresh)
+wave6 <- wave6[-refresh,]
+refresh.ids <- wave6$mergeid[refresh]
+wave6.imp <- wave6.imp[!wave6.imp$mergeid %in% refresh.ids, ]
+
+#set path to local raw data wave 9 (SHARE data)
+local.file.path <- "/Users/gabn/Library/CloudStorage/GoogleDrive-rainer.gabriel@gmail.com/My Drive/Documents/Work/ACTIVE/ZHAW/3_Research-Projects/Armut 13. AHV /Shared-Eliane/Data/sharew9_rel9-0-0_ALL_datasets_spss/"
+
+### Setting Up Share Wave 9
+wave9.activities <- #infos on activities
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_ac.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.consumption <- #infos on consumption
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_co.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.demo<- #infos on demographics
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_dn.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.finance<- #financial infos
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_ft.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+wave9.fin.transfers<- #financial transfers
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_ft.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+wave9.healthcare<- 
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_hc.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.basics <-
+  #basic information on participants (share calls this "coverscreen")
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_cv_r.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.tech <- #technical variables
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_technical_variables.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.assets <- #technical variables
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_as.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.weights <- #cross-sectional weights
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_gv_weights.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.hh <- #household incomes
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_hh.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.gv.housing <- #generated variables housing
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_gv_housing.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.imp <- #all imputed variables
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_gv_imputations.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.pensions <- #pension infos
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_ep.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+wave9.children <- #infos on children
+  read.spss(
+    file = paste0(local.file.path,"sharew9_rel9-0-0_ch.sav"),
+    to.data.frame = TRUE,
+    reencode = "UTF-8",
+    use.missings = TRUE
+  )
+
+
+
+
+# Subset all datasets for switzerland ----------------------------
+wave9.activities <- subset(wave9.activities,country=="Switzerland")
+wave9.assets<- subset(wave9.assets,country=="Switzerland")
+wave9.basics<- subset(wave9.basics,country=="Switzerland")
+wave9.children<- subset(wave9.children,country=="Switzerland")
+wave9.consumption<- subset(wave9.consumption,country=="Switzerland")
+wave9.demo<- subset(wave9.demo,country=="Switzerland")
+wave9.fin.transfers<- subset(wave9.fin.transfers,country=="Switzerland")
+wave9.finance<- subset(wave9.finance,country=="Switzerland")
+wave9.gv.housing<- subset(wave9.gv.housing,country=="Switzerland")
+wave9.healthcare<- subset(wave9.healthcare,country=="Switzerland")
+wave9.hh<- subset(wave9.hh,country=="Switzerland")
+wave9.imp<- subset(wave9.imp,country=="Switzerland")
+wave9.pensions<- subset(wave9.pensions,country=="Switzerland")
+wave9.tech<- subset(wave9.tech,country=="Switzerland")
+wave9.weights<- subset(wave9.weights,country=="Switzerland")
+
+# Merging all these switzerland specific datasets -------------------------
+wave9.merged <-  merge(wave9.activities, wave9.assets, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.basics, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.children, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.consumption, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.demo, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.fin.transfers, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.gv.housing, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.healthcare, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.hh, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.pensions, by = "mergeid")
+wave9.merged <- merge(wave9.merged, wave9.tech, by = "mergeid")
+wave9 <- merge(wave9.merged, wave9.weights, by = "mergeid")
+rm(wave9.merged)
+
+#remove all previous datasets to clear the workspace
+rm(wave9.activities)
+rm(wave9.assets)
+rm(wave9.basics)
+rm(wave9.children)
+rm(wave9.consumption)
+rm(wave9.demo)
+rm(wave9.fin.transfers)
+rm(wave9.finance)
+rm(wave9.gv.housing)
+rm(wave9.healthcare)
+rm(wave9.hh)
+# rm(wave9.imp) #...except for the imputation file cause lots of variables are gonna be taken from it and it can't be merged in long form
+rm(wave9.pensions)
+rm(wave9.tech)
+rm(wave9.weights)
+
+#subset age
+levels(wave9$age2022)
+wave9$age2022 <- as.character(wave9$age2022)
+head(wave9$age2022)
+wave9$age2022.num <- memisc::recode(wave9$age2022,
+                                    NA<- c( "Don't know","Refusal","Not applicable"), 
+                                    otherwise="copy")
+wave9$age2022.num <- as.numeric(as.character(wave9$age2022.num))
+
+wave9 <- subset(wave9, wave9$age2022.num>=65)
+
+#subset home-dwelling
+nursinghome <- which(wave9$mn024_=="Nursing home")
+length(nursinghome)
+wave9 <- wave9[-nursinghome,]
+nursinghome.ids <- wave9$mergeid[nursinghome]
+wave9.imp <- wave9.imp[!wave9.imp$mergeid %in% nursinghome.ids, ]
+
+#remove refreshments 
+refresh <- which(wave9$mn101_=="Baseline questionnaire")
+length(refresh)
+wave9 <- wave9[-refresh,]
+refresh.ids <- wave9$mergeid[refresh]
+wave9.imp <- wave9.imp[!wave9.imp$mergeid %in% refresh.ids, ]
+
+# 2. Setup Variables for wave 6 ----------------------------------------------
+
+euro.chf.exrate <- wave6.imp$exrate[1] #getting the exchange rate from the gv/imp file
+
+
+# first we take the thinc variable which is the aggregate of all individual income components
+wave6.imp.thinc.wide <-
+  dcast(wave6.imp, mergeid ~ implicat, value.var = "thinc")
+names(wave6.imp.thinc.wide) <- c(
+  "mergeid",
+  "thinc.1",
+  "thinc.2",
+  "thinc.3",
+  "thinc.4",
+  "thinc.5"
+)
+wave6.imp.thinc.wide$mean.thinc <- (wave6.imp.thinc.wide$thinc.1+ 
+                                      wave6.imp.thinc.wide$thinc.2+
+                                      wave6.imp.thinc.wide$thinc.3+
+                                      wave6.imp.thinc.wide$thinc.4+
+                                      wave6.imp.thinc.wide$thinc.5)/5
+summary(wave6.imp.thinc.wide$mean.thinc) 
+finder <- match(as.character(wave6$mergeid),as.character(wave6.imp.thinc.wide$mergeid))
+wave6$imputed.household.net.worth.imputed.euro.amount.year.euro <- wave6.imp.thinc.wide$mean.thinc[finder]
+wave6$imputed.household.net.worth.imputed.euro.amount.month.euro <- wave6$imputed.household.net.worth.imputed.euro.amount.year.euro/12
+wave6$aggregated.total.hhincome <- wave6$imputed.household.net.worth.imputed.euro.amount.month.euro*euro.chf.exrate
+summary(wave6$aggregated.total.hhincome)
+
+# we take the thinc2 variable which is the one-shot question for hh income
+wave6.imp.thinc2.wide <-
+  dcast(wave6.imp, mergeid ~ implicat, value.var = "thinc2") 
+
+names(wave6.imp.thinc2.wide) <- c(
+  "mergeid",
+  "thinc2.1",
+  "thinc2.2",
+  "thinc2.3",
+  "thinc2.4",
+  "thinc2.5"
+)
+wave6.imp.thinc2.wide$mean.thinc2 <- (wave6.imp.thinc2.wide$thinc2.1+ 
+                                        wave6.imp.thinc2.wide$thinc2.2+
+                                        wave6.imp.thinc2.wide$thinc2.3+
+                                        wave6.imp.thinc2.wide$thinc2.4+
+                                        wave6.imp.thinc2.wide$thinc2.5)/5
+finder <- match(as.character(wave6$mergeid),as.character(wave6.imp.thinc2.wide$mergeid))
+wave6$imputed.self.reported.total.hhincome.amount.year.euro <- wave6.imp.thinc2.wide$mean.thinc2[finder]
+wave6$imputed.self.reported.total.hhincome.amount.month.euro <- wave6$imputed.self.reported.total.hhincome.amount.year.euro/12
+wave6$self.reported.total.hhincome <- wave6$imputed.self.reported.total.hhincome.amount.month.euro*euro.chf.exrate
+summary(wave6$self.reported.total.hhincome)
+
+#creating the equivalizing factor based on modified OECD methodology 
+length(which(is.na(wave6$hhsize)))
+
+wave6$household.equiv.weighting.factor <- ifelse(wave6$hhsize==1,1,
+                                                 ifelse(wave6$hhsize==2,(1+(1*0.5)),
+                                                        ifelse(wave6$hhsize==3,(1+(2*0.5)),
+                                                               ifelse(wave6$hhsize==4,(1+(3*0.5)),
+                                                                      ifelse(wave6$hhsize==5,(1+(4*0.5)), 
+                                                                             ifelse(wave6$hhsize==6,(1+(5*0.5)), 
+                                                                                    ifelse(wave6$hhsize==7,(1+(6*0.5)), 
+                                                                                           NA)))))))
+table(wave6$household.equiv.weighting.factor)
+
+#correcting those who live with children (weighted with 0.3) and not with adults (weighted 0.5)
+filter <- which(wave6$hhsize==2 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1.3
+
+filter <- which(wave6$hhsize==3 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+0.5+0.3
+filter <- which(wave6$hhsize==3 & wave6$number.child.living.in.hh==2)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(2*0.3)
+
+filter <- which(wave6$hhsize==4 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+0.3
+filter <- which(wave6$hhsize==4 & wave6$number.child.living.in.hh==2)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+0.5+(2*0.3)
+filter <- which(wave6$hhsize==4 & wave6$number.child.living.in.hh==3)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(3*0.3)
+
+filter <- which(wave6$hhsize==5 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+0.3
+filter <- which(wave6$hhsize==5 & wave6$number.child.living.in.hh==2)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+(2*0.3)
+filter <- which(wave6$hhsize==5 & wave6$number.child.living.in.hh==3)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+0.5+(3*0.3)
+
+filter <- which(wave6$hhsize==6 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(4*0.5)+0.3
+filter <- which(wave6$hhsize==6 & wave6$number.child.living.in.hh==2)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+(2*0.3)
+filter <- which(wave6$hhsize==6 & wave6$number.child.living.in.hh==3)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+(3*0.3)
+
+filter <- which(wave6$hhsize==7 & wave6$number.child.living.in.hh==1)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(5*0.5)+0.3
+filter <- which(wave6$hhsize==7 & wave6$number.child.living.in.hh==2)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(4*0.5)+(2*0.3)
+filter <- which(wave6$hhsize==7 & wave6$number.child.living.in.hh==3)
+length(filter)
+wave6$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+(3*0.3)
+
+
+# 3. setting up variables for wave 9 -----------------------------------------
+
+euro.chf.exrate <- wave9.imp$exrate[1] #getting the exchange rate from the gv/imp file
+
+# first we take the thinc variable which is the aggregate of all individual income components
+
+wave9.imp.thinc.wide <-
+  dcast(wave9.imp, mergeid ~ implicat, value.var = "thinc")
+names(wave9.imp.thinc.wide) <- c(
+  "mergeid",
+  "thinc.1",
+  "thinc.2",
+  "thinc.3",
+  "thinc.4",
+  "thinc.5"
+)
+
+wave9.imp.thinc.wide$mean.thinc <- (wave9.imp.thinc.wide$thinc.1+ 
+                                      wave9.imp.thinc.wide$thinc.2+
+                                      wave9.imp.thinc.wide$thinc.3+
+                                      wave9.imp.thinc.wide$thinc.4+
+                                      wave9.imp.thinc.wide$thinc.5)/5
+finder <- match(as.character(wave9$mergeid),as.character(wave9.imp.thinc.wide$mergeid))
+wave9$imputed.household.net.worth.imputed.euro.amount.year.euro <- wave9.imp.thinc.wide$mean.thinc[finder]
+wave9$imputed.household.net.worth.imputed.euro.amount.month.euro <- wave9$imputed.household.net.worth.imputed.euro.amount.year.euro/12
+wave9$aggregated.total.hhincome <- wave9$imputed.household.net.worth.imputed.euro.amount.month.euro*euro.chf.exrate
+
+
+wave9.imp.thinc2.wide <-
+  dcast(wave9.imp, mergeid ~ implicat, value.var = "thinc2")
+names(wave9.imp.thinc2.wide) <- c(
+  "mergeid",
+  "thinc2.1",
+  "thinc2.2",
+  "thinc2.3",
+  "thinc2.4",
+  "thinc2.5"
+)
+wave9.imp.thinc2.wide$mean.thinc2 <- (wave9.imp.thinc2.wide$thinc2.1+ 
+                                        wave9.imp.thinc2.wide$thinc2.2+
+                                        wave9.imp.thinc2.wide$thinc2.3+
+                                        wave9.imp.thinc2.wide$thinc2.4+
+                                        wave9.imp.thinc2.wide$thinc2.5)/5
+finder <- match(as.character(wave9$mergeid),as.character(wave9.imp.thinc2.wide$mergeid))
+wave9$imputed.self.reported.total.hhincome.amount.year.euro <- wave9.imp.thinc2.wide$mean.thinc2[finder]
+wave9$imputed.self.reported.total.hhincome.amount.month.euro <- wave9$imputed.self.reported.total.hhincome.amount.year.euro/12
+wave9$self.reported.total.hhincome <- wave9$imputed.self.reported.total.hhincome.amount.month.euro*euro.chf.exrate
+summary(wave9$self.reported.total.hhincome)
+
+
+#creating the equivalizing factor based on modified OECD methodology 
+table(wave9$hhsize)
+length(which(is.na(wave9$hhsize)))
+
+wave9$household.equiv.weighting.factor <- ifelse(wave9$hhsize==1,1,
+                                                 ifelse(wave9$hhsize==2,(1+(1*0.5)),
+                                                        ifelse(wave9$hhsize==3,(1+(2*0.5)),
+                                                               ifelse(wave9$hhsize==4,(1+(3*0.5)),
+                                                                      ifelse(wave9$hhsize==5,(1+(4*0.5)), 
+                                                                             ifelse(wave9$hhsize==6,(1+(5*0.5)), 
+                                                                                    ifelse(wave9$hhsize==7,(1+(6*0.5)), 
+                                                                                           NA)))))))
+table(wave9$household.equiv.weighting.factor)
+
+#correcting those who live with children (weighted with 0.3) and not with adults (weighted 0.5)
+
+filter <- which(wave9$hhsize==2 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1.3
+
+filter <- which(wave9$hhsize==3 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+0.5+0.3
+filter <- which(wave9$hhsize==3 & wave9$number.child.living.in.hh==2)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(2*0.3)
+
+filter <- which(wave9$hhsize==4 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+0.3
+filter <- which(wave9$hhsize==4 & wave9$number.child.living.in.hh==2)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+0.5+(2*0.3)
+filter <- which(wave9$hhsize==4 & wave9$number.child.living.in.hh==3)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(3*0.3)
+
+filter <- which(wave9$hhsize==5 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+0.3
+filter <- which(wave9$hhsize==5 & wave9$number.child.living.in.hh==2)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+(2*0.3)
+filter <- which(wave9$hhsize==5 & wave9$number.child.living.in.hh==3)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+0.5+(3*0.3)
+
+filter <- which(wave9$hhsize==6 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(4*0.5)+0.3
+filter <- which(wave9$hhsize==6 & wave9$number.child.living.in.hh==2)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+(2*0.3)
+filter <- which(wave9$hhsize==6 & wave9$number.child.living.in.hh==3)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(2*0.5)+(3*0.3)
+
+filter <- which(wave9$hhsize==7 & wave9$number.child.living.in.hh==1)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(5*0.5)+0.3
+filter <- which(wave9$hhsize==7 & wave9$number.child.living.in.hh==2)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(4*0.5)+(2*0.3)
+filter <- which(wave9$hhsize==7 & wave9$number.child.living.in.hh==3)
+length(filter)
+wave9$household.equiv.weighting.factor[filter] <- 1+(3*0.5)+(3*0.3)
+
+length(which(is.na(wave9$household.equiv.weighting.factor)))
+
+
+# 4. Calculating poverty indicators ----------------------------------------
+
+### wave 6 
+# calculating equivalized household income variable for each measure 
+wave6$equiv.agg.income <- wave6$aggregated.total.hhincome/(wave6$household.equiv.weighting.factor)
+wave6$equiv.self.reported.income <- wave6$self.reported.total.hhincome/(wave6$household.equiv.weighting.factor)
+
+summary(wave6$equiv.agg.income)
+summary(wave6$equiv.self.reported.income)
+
+# creating binary poverty variables for each measure 
+# for aggregated 
+wave6$poverty.agg.bn <- ifelse(is.na(wave6$equiv.agg.income),NA,
+                               ifelse(wave6$equiv.agg.income<2247,1,0) #based on 2020 SKOS / BFS richtlinien
+)
+prop.table(table(wave6$poverty.agg.bn))
+
+# for self reported 
+wave6$poverty.self.reported.bn <- ifelse(is.na(wave6$equiv.self.reported.income),NA,
+                                         ifelse(wave6$equiv.self.reported.income<2247,1,0) #based on 2020 SKOS / BFS richtlinien
+)
+prop.table(table(wave6$poverty.self.reported.bn))
+
+#  population estimates 
+
+dsurvey.w6 <- svydesign(ids = wave6$mergeid, data = wave6, weights = wave9$cciw_w6)
+t1 <- svymean(~poverty.agg.bn, dsurvey.w6, na.rm=TRUE)*100 # est
+t2 <- svymean(~poverty.self.reported.bn, dsurvey.w6, na.rm=TRUE)*100 # est
+
+table.w6 <- rbind(t1,t2)
+rownames(table.w6) <- c("Absolute Poverty based on aggregated income measure (thinc)", 
+                        "Absolute Poverty based on one-shot income measure (thinc2)")
+colnames(table.w6) <- "Wave 6 (%)"
+table.w6
+
+### wave 9 
+
+# calculating equivalized household income variable for each measure wave 9
+wave9$equiv.agg.income <- wave9$aggregated.total.hhincome/(wave9$household.equiv.weighting.factor)
+wave9$equiv.self.reported.income <- wave9$self.reported.total.hhincome/(wave9$household.equiv.weighting.factor)
+
+# creating binary poverty variables for each mesure 
+# for aggregated 
+wave9$poverty.agg.bn <- ifelse(is.na(wave9$equiv.agg.income),NA,
+                            ifelse(wave9$equiv.agg.income<2279,1,0) #based on 2020 SKOS / BFS richtlinien
+)
+prop.table(table(wave9$poverty.agg.bn))
+
+# for self reported 
+wave9$poverty.self.reported.bn <- ifelse(is.na(wave9$equiv.self.reported.income),NA,
+                               ifelse(wave9$equiv.self.reported.income<2279,1,0) #based on 2020 SKOS / BFS richtlinien
+)
+prop.table(table(wave9$poverty.self.reported.bn))
+
+
+
+# set survey design for population estimates 
+dsurvey.w9 <- svydesign(ids = wave9$mergeid, data = wave9, weights = wave9$cciw_w9)
+t3 <- svymean(~poverty.agg.bn, dsurvey.w9, na.rm=TRUE) # est
+t4 <- svymean(~poverty.self.reported.bn, dsurvey.w9, na.rm=TRUE) # est
+
+
+table.w9 <- rbind(t3,t4)
+rownames(table.w9) <- c("Absolute Poverty based on aggregated income measure (thinc)", 
+                        "Absolute Poverty based on one-shot income measure (thinc2)")
+colnames(table.w9) <- "Wave 9 (%)"
+table.w9
+
+pov.table <- cbind(table.w6, table.w9)
+
+print(pov.table)
+
+write.csv(pov.table, file="table_poverty-overview.csv")
+
+
+
+
+
+
+
+
